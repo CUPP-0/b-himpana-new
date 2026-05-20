@@ -32,13 +32,7 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 // === KONEKSI DATABASE ===
-db.connect((err) => {
-  if (err) {
-    console.error("❌ Koneksi database gagal:", err);
-  } else {
-    console.log("✅ Koneksi database berhasil!");
-  }
-});
+
 
 // === ROUTES UTAMA ===
 app.get("/", (req, res) => {
