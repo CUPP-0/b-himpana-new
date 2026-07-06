@@ -550,9 +550,8 @@ router.get("/api/member", async (req, res) => {
         m.address,
         m.city,
         m.card_image_path,
+        m.created_at,
         m.branch_id,
-        m.created_at
-
         b.name AS branch_name,
         b.code AS branch_code
       FROM members m
