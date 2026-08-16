@@ -75,34 +75,29 @@ client.on("authenticated", () => {
   console.log("🔐 WhatsApp berhasil authenticated!");
 });
 
-client.on("change_state", (state) => {
-  console.log("🔄 WhatsApp state:", state);
-});
-
-client.on("loading_screen", (percent, message) => {
-  console.log(`⏳ WhatsApp loading: ${percent}% - ${message}`);
-});
-
-client.on("loading_screen", (percent, message) => {
-  console.log(`⏳ WhatsApp loading: ${percent}% - ${message}`);
-});
-
-client.on("change_state", (state) => {
-  console.log(`🔄 WhatsApp state: ${state}`);
-});
-
 client.on("ready", () => {
   console.log("✅ WhatsApp Web siap digunakan!");
   clientReady = true;
 });
 
 client.on("auth_failure", (msg) => {
-  console.error("❌ Gagal autentikasi WhatsApp:", msg);
-  clientReady = false;
+  console.error("❌ AUTH FAILURE:", msg);
+});
+
+client.on("disconnected", (reason) => {
+  console.error("❌ DISCONNECTED:", reason);
+});
+
+client.on("loading_screen", (percent, message) => {
+  console.log(`⏳ LOADING: ${percent}% - ${message}`);
 });
 
 client.on("change_state", (state) => {
-  console.log("🔄 WhatsApp state:", state);
+  console.log(`🔄 STATE: ${state}`);
+});
+
+client.on("error", (error) => {
+  console.error("💥 CLIENT ERROR:", error);
 });
 
 client.on("disconnected", (reason) => {
