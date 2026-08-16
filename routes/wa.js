@@ -36,15 +36,17 @@ let isReconnecting = false;
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: "./wa-session" }),
   puppeteer: {
-    executablePath: "/root/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome",
+    executablePath: "/usr/bin/chromium",
     headless: true,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
-      "--disable-gpu",
+      "--disable-accelerated-2d-canvas",
       "--no-first-run",
       "--no-zygote",
+      "--single-process",
+      "--disable-gpu",
     ],
   },
 });
