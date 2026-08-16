@@ -51,7 +51,6 @@ app.use("/api/cabang", cabang)
 app.use(router)
 app.use(loginmember)
 
-// === ENDPOINT KIRIM WHATSAPP ===
 
 
 // === JALANKAN SERVER ===

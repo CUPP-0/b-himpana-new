@@ -113,6 +113,29 @@ client.on("remote_session_saved", () => {
 
 console.log("🚀 Memulai WhatsApp client...");
 
+client.on("authenticated", async () => {
+  console.log("🔐 WhatsApp berhasil authenticated!");
+
+  try {
+    console.log("🌐 Checking WhatsApp Web page...");
+
+    if (client.pupPage) {
+      const info = await client.pupPage.evaluate(() => ({
+        url: location.href,
+        title: document.title,
+        debugVersion: window.Debug?.VERSION ?? null,
+        readyState: document.readyState
+      }));
+
+      console.log("📊 WA PAGE:", info);
+    } else {
+      console.log("❌ pupPage belum tersedia");
+    }
+  } catch (err) {
+    console.error("❌ Gagal cek pupPage:", err);
+  }
+});
+
 client.initialize()
   .then(() => {
     console.log("✅ initialize() selesai dipanggil");
