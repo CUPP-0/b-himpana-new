@@ -83,6 +83,14 @@ client.on("loading_screen", (percent, message) => {
   console.log(`⏳ WhatsApp loading: ${percent}% - ${message}`);
 });
 
+client.on("loading_screen", (percent, message) => {
+  console.log(`⏳ WhatsApp loading: ${percent}% - ${message}`);
+});
+
+client.on("change_state", (state) => {
+  console.log(`🔄 WhatsApp state: ${state}`);
+});
+
 client.on("ready", () => {
   console.log("✅ WhatsApp Web siap digunakan!");
   clientReady = true;
