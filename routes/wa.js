@@ -117,22 +117,25 @@ client.on("authenticated", async () => {
   console.log("🔐 WhatsApp berhasil authenticated!");
 
   try {
-    console.log("🌐 Checking WhatsApp Web page...");
+    const info = await client.pupPage.evaluate(() => ({
+      debugVersion: window.Debug?.VERSION ?? null,
+      authStore: typeof window.AuthStore,
+      store: typeof window.Store,
+      wwebjs: typeof window.WWebJS,
+      readyState: document.readyState
+    }));
 
-    if (client.pupPage) {
-      const info = await client.pupPage.evaluate(() => ({
-        url: location.href,
-        title: document.title,
-        debugVersion: window.Debug?.VERSION ?? null,
-        readyState: document.readyState
-      }));
+    console.log("📊 BEFORE STORE:", info);
 
-      console.log("📊 WA PAGE:", info);
-    } else {
-      console.log("❌ pupPage belum tersedia");
-    }
+    await client.pupPage.waitForFunction(
+      'window.Store != undefined',
+      { timeout: 10000 }
+    );
+
+    console.log("✅ window.Store sudah tersedia!");
+
   } catch (err) {
-    console.error("❌ Gagal cek pupPage:", err);
+    console.error("❌ window.Store TIDAK tersedia:", err.message);
   }
 });
 
