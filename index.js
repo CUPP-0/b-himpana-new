@@ -13,14 +13,16 @@ import cabang from "./routes/cabangProvinsi.js";
 import { createCanvas } from "canvas";
 
 const app = express();
+
 app.use(cors({
-  origin: ["https://himpana.com", "https://www.himpana.com"], // domain frontend
+  origin: ["https://himpana.com", "https://www.himpana.com"],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true // penting jika frontend kirim token/cookie
+  credentials: true
 }));
 
-app.use(bodyParser.json());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // === KONFIGURASI ===
 const FONNTE_TOKEN = "BjMWRoyrKaYJTFBsjcav"; // token kamu

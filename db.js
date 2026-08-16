@@ -2,9 +2,9 @@ import mysql from "mysql2";
 
 const db = mysql.createPool({
   host: "127.0.0.1",
-  user: "himpana",
-  password: "12345",
-  database: "himpana",
+  user: "root",
+  password: "",
+  database: "backend_himpana",
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,

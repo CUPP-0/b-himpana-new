@@ -129,36 +129,82 @@ async function sendWhatsAppMessage(chatId, media, caption, retries = 3) {
         throw new Error("WhatsApp client belum siap");
       }
 
-      // Cek apakah chat tersedia
-      await client.getChatById(chatId);
+      // Pastikan nomor dalam format yang benar
+      let phone = String(chatId)
+        .replace("@c.us", "")
+        .replace(/\D/g, "");
 
-      if (caption) {
-        await client.sendMessage(chatId, caption);
+      if (phone.startsWith("0")) {
+        phone = "62" + phone.substring(1);
       }
 
+      if (!phone.startsWith("62")) {
+        phone = "62" + phone;
+      }
+
+      const whatsappId = `${phone}@c.us`;
+
+      console.log("📱 Nomor asli :", chatId);
+      console.log("📱 Nomor WA   :", whatsappId);
+
+      // Cek apakah nomor terdaftar di WhatsApp
+      const numberId = await client.getNumberId(phone);
+
+      if (!numberId) {
+        throw new Error(
+          `Nomor ${phone} tidak terdaftar di WhatsApp`
+        );
+      }
+
+      console.log("✅ Nomor WhatsApp ditemukan:", numberId._serialized);
+
+      // Kirim caption
+      if (caption) {
+        await client.sendMessage(
+          numberId._serialized,
+          caption
+        );
+
+        console.log("✅ Caption berhasil dikirim");
+      }
+
+      // Kirim media
       if (media) {
-        await client.sendMessage(chatId, media, {
-          caption: "🎫 Ini ID Card Anda",
-        });
+        await client.sendMessage(
+          numberId._serialized,
+          media,
+          {
+            caption: "🎫 Ini kartu anggota anda",
+          }
+        );
+
+        console.log("✅ ID Card berhasil dikirim");
       }
 
       console.log("✅ Pesan WhatsApp berhasil dikirim");
+
       return true;
     } catch (error) {
-      console.warn(`⚠️ Attempt ${attempt}/${retries} gagal:`, error.message);
+      console.error(`❌ Attempt ${attempt}/${retries} gagal`);
+
+      console.error("Type:", typeof error);
+      console.error("Error:", error);
+      console.error("Message:", error?.message);
+      console.error("Stack:", error?.stack);
 
       if (attempt === retries) {
         throw error;
       }
 
-      // Tunggu sebelum retry
-      await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+      await new Promise((resolve) =>
+        setTimeout(resolve, 2000 * attempt)
+      );
 
-      // Jika execution context destroyed, restart client
       if (
-        error.message.includes("Execution context was destroyed") ||
-        error.message.includes("Session closed")
+        error?.message?.includes("Execution context was destroyed") ||
+        error?.message?.includes("Session closed")
       ) {
+        console.log("🔄 Execution context bermasalah, restart client...");
         await restartClient();
       }
     }
@@ -332,7 +378,7 @@ router.post("/api/kirim-member", async (req, res) => {
       else if (!phoneNumber.startsWith("62")) phoneNumber = "62" + phoneNumber;
       const chatId = phoneNumber + "@c.us";
 
-      const caption = `Hai ${name}, selamat anda telah menjadi anggota baru HIMPANA`;
+      const caption = `Selamat ${name}, Anda telah resmi menjadi anggota baru HIMPANA`;
       const media = MessageMedia.fromFilePath(filePath);
 
       // === Kirim media pertama (depan) ===
@@ -345,7 +391,7 @@ router.post("/api/kirim-member", async (req, res) => {
       await sendWhatsAppMessage(
         chatId,
         mediaBack,
-        "Ini adalah sisi belakang kartu anggota.",
+        "Ini adalah kartu anggota sisi belakang. Terima kasih telah menjadi bagian dari keluarga besar HIMPANA.",
       );
 
       return res.json({
