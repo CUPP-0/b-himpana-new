@@ -71,10 +71,13 @@ client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
 });
 
+client.on("authenticated", () => {
+  console.log("🔐 WhatsApp berhasil authenticated!");
+});
+
 client.on("ready", () => {
   console.log("✅ WhatsApp Web siap digunakan!");
   clientReady = true;
-  isReconnecting = false;
 });
 
 client.on("auth_failure", (msg) => {
@@ -82,20 +85,30 @@ client.on("auth_failure", (msg) => {
   clientReady = false;
 });
 
-client.on("disconnected", (reason) => {
-  console.warn("⚠️ WhatsApp Client terputus:", reason);
-  clientReady = false;
-  setTimeout(() => {
-    restartClient();
-  }, 5000);
+client.on("change_state", (state) => {
+  console.log("🔄 WhatsApp state:", state);
 });
 
-// Handle page errors
+client.on("disconnected", (reason) => {
+  console.error("❌ WhatsApp Client terputus:", reason);
+  clientReady = false;
+
+  // JANGAN restart otomatis dulu
+});
+
 client.on("remote_session_saved", () => {
   console.log("💾 Session saved remotely");
 });
 
-client.initialize();
+console.log("🚀 Memulai WhatsApp client...");
+
+client.initialize()
+  .then(() => {
+    console.log("✅ initialize() selesai dipanggil");
+  })
+  .catch((error) => {
+    console.error("❌ initialize() gagal:", error);
+  });
 
 /* ======================================================
    🧮 Fungsi Generate Card Number otomatis
