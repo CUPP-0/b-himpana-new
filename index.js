@@ -24,6 +24,11 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // === KONFIGURASI ===
 const FONNTE_TOKEN = "BjMWRoyrKaYJTFBsjcav"; // token kamu
 const uploadDir = path.join(process.cwd(), "uploads/wa");

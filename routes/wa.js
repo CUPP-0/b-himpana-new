@@ -510,13 +510,17 @@ async function handleUpdateMember(req, res) {
   const finalRetirementNumber = String(retirement_number ?? "").trim();
 
   console.log("[UPDATE MEMBER] Request diterima:", {
+    method: req.method,
+    path: req.originalUrl || req.url,
     targetMemberId,
     name: finalName,
     old_retirement_number: finalOldRetirementNumber,
     retirement_number: finalRetirementNumber,
     phone_number,
     birth_date,
+    address,
     city,
+    rawBody: req.body,
   });
 
   if (
@@ -713,14 +717,21 @@ async function handleUpdateMember(req, res) {
     });
   } catch (error) {
     console.error("❌ Gagal update member:", {
+      method: req.method,
+      path: req.originalUrl || req.url,
       targetMemberId,
       oldRetirementNumber: finalOldRetirementNumber,
       newRetirementNumber: finalRetirementNumber,
       name: finalName,
       phone_number,
+      address,
       city,
+      body: req.body,
       message: error.message,
       code: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage,
       stack: error.stack,
     });
 
