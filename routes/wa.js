@@ -509,6 +509,16 @@ async function handleUpdateMember(req, res) {
   const finalOldRetirementNumber = String(old_retirement_number ?? "").trim();
   const finalRetirementNumber = String(retirement_number ?? "").trim();
 
+  console.log("[UPDATE MEMBER] Request diterima:", {
+    targetMemberId,
+    name: finalName,
+    old_retirement_number: finalOldRetirementNumber,
+    retirement_number: finalRetirementNumber,
+    phone_number,
+    birth_date,
+    city,
+  });
+
   if (
     !finalName ||
     !finalRetirementNumber ||
@@ -518,6 +528,16 @@ async function handleUpdateMember(req, res) {
     !city ||
     (!finalOldRetirementNumber && !targetMemberId)
   ) {
+    console.warn("[UPDATE MEMBER] validasi gagal: data tidak lengkap", {
+      targetMemberId,
+      finalName,
+      finalOldRetirementNumber,
+      finalRetirementNumber,
+      phone_number,
+      birth_date,
+      address: Boolean(address),
+      city,
+    });
     return res.status(400).json({
       status: "error",
       message: "Data tidak lengkap. Pastikan semua field terisi.",
@@ -525,6 +545,9 @@ async function handleUpdateMember(req, res) {
   }
 
   if (!isValidRetirementNumber(finalRetirementNumber)) {
+    console.warn("[UPDATE MEMBER] validasi gagal: format retirement_number salah", {
+      finalRetirementNumber,
+    });
     return res.status(400).json({
       status: "error",
       message: "Format retirement_number tidak valid! Contoh: 01-9-311589-40",
@@ -536,6 +559,7 @@ async function handleUpdateMember(req, res) {
     let oldFotoPath = null;
 
     if (targetMemberId) {
+      console.log("[UPDATE MEMBER] Cari member berdasarkan id:", targetMemberId);
       const [memberRows] = await db
         .promise()
         .query(
@@ -544,6 +568,7 @@ async function handleUpdateMember(req, res) {
         );
 
       if (!memberRows.length) {
+        console.warn("[UPDATE MEMBER] member dengan id tidak ditemukan:", targetMemberId);
         return res.status(404).json({
           status: "error",
           message: "Data member tidak ditemukan.",
@@ -553,6 +578,7 @@ async function handleUpdateMember(req, res) {
       oldRetirementNumber = memberRows[0].retirement_number;
       oldFotoPath = memberRows[0].card_image_path;
     } else {
+      console.log("[UPDATE MEMBER] Cari member berdasarkan nomor pensiun lama:", oldRetirementNumber);
       const [oldData] = await db
         .promise()
         .query(
@@ -561,6 +587,7 @@ async function handleUpdateMember(req, res) {
         );
 
       if (!oldData.length) {
+        console.warn("[UPDATE MEMBER] member lama tidak ditemukan:", oldRetirementNumber);
         return res.status(404).json({
           status: "error",
           message: "Data member lama tidak ditemukan.",
@@ -572,6 +599,7 @@ async function handleUpdateMember(req, res) {
     }
 
     if (finalRetirementNumber !== oldRetirementNumber) {
+      console.log("[UPDATE MEMBER] Cek duplikasi nomor pensiun baru:", finalRetirementNumber);
       const [dupeCheck] = await db
         .promise()
         .query(
@@ -580,6 +608,7 @@ async function handleUpdateMember(req, res) {
         );
 
       if (dupeCheck.length > 0) {
+        console.warn("[UPDATE MEMBER] Duplikasi nomor pensiun terdeteksi:", finalRetirementNumber);
         return res.status(400).json({
           status: "error",
           message: `Nomor pensiun ${finalRetirementNumber} sudah terdaftar!`,
@@ -592,12 +621,14 @@ async function handleUpdateMember(req, res) {
         ? `.${oldFotoPath}`
         : oldFotoPath;
 
+      console.log("[UPDATE MEMBER] Hapus foto lama jika ada:", normalizedOldPath);
       if (fs.existsSync(normalizedOldPath)) {
         await fs.promises.unlink(normalizedOldPath);
       }
     }
 
     const card_number = generateCardNumber();
+    console.log("[UPDATE MEMBER] Generate nomor kartu baru:", card_number);
     const templatePath = path.resolve("assets/ID_CARD_FRONT_2024.jpg");
     const template = await loadImage(templatePath);
     const canvas = createCanvas(template.width, template.height);
@@ -623,6 +654,7 @@ async function handleUpdateMember(req, res) {
     );
 
     const fotoPath = `/uploads/wa/${filename}`;
+    console.log("[UPDATE MEMBER] Simpan ID Card baru dengan path:", fotoPath);
 
     const updateQuery = targetMemberId
       ? "UPDATE members SET name=?, retirement_number=?, phone_number=?, birth_date=?, address=?, city=?, card_image_path=? WHERE id=?"
@@ -650,7 +682,24 @@ async function handleUpdateMember(req, res) {
           oldRetirementNumber,
         ];
 
+    console.log("[UPDATE MEMBER] Jalankan query update dengan data:", {
+      targetMemberId,
+      oldRetirementNumber,
+      newRetirementNumber: finalRetirementNumber,
+      name: finalName,
+      city,
+      fotoPath,
+    });
+
     await db.promise().query(updateQuery, updateParams);
+
+    console.log("[UPDATE MEMBER] Update berhasil:", {
+      targetMemberId,
+      name: finalName,
+      retirement_number: finalRetirementNumber,
+      card_number,
+      fotoPath,
+    });
 
     return res.json({
       status: "success",
@@ -663,7 +712,17 @@ async function handleUpdateMember(req, res) {
       },
     });
   } catch (error) {
-    console.error("❌ Gagal update member:", error);
+    console.error("❌ Gagal update member:", {
+      targetMemberId,
+      oldRetirementNumber: finalOldRetirementNumber,
+      newRetirementNumber: finalRetirementNumber,
+      name: finalName,
+      phone_number,
+      city,
+      message: error.message,
+      code: error.code,
+      stack: error.stack,
+    });
 
     if (error.code === "ER_DUP_ENTRY") {
       return res.status(400).json({
