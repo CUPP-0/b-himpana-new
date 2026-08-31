@@ -491,8 +491,10 @@ router.post("/api/kirim-member", async (req, res) => {
 /* ======================================================
    ✏️ ROUTE: Update Member
 ====================================================== */
-router.put("/api/update-member", async (req, res) => {
+async function handleUpdateMember(req, res) {
   const {
+    id,
+    member_id,
     name,
     old_retirement_number,
     retirement_number,
@@ -502,21 +504,27 @@ router.put("/api/update-member", async (req, res) => {
     city,
   } = req.body;
 
+  const targetMemberId = id ?? member_id ?? null;
+  const finalName = String(name ?? "").trim();
+  const finalOldRetirementNumber = String(old_retirement_number ?? "").trim();
+  const finalRetirementNumber = String(retirement_number ?? "").trim();
+
   if (
-    !name ||
-    !old_retirement_number ||
-    !retirement_number ||
+    !finalName ||
+    !finalRetirementNumber ||
     !phone_number ||
     !birth_date ||
     !address ||
-    !city
+    !city ||
+    (!finalOldRetirementNumber && !targetMemberId)
   ) {
-    return res
-      .status(400)
-      .json({ status: "error", message: "Data tidak lengkap" });
+    return res.status(400).json({
+      status: "error",
+      message: "Data tidak lengkap. Pastikan semua field terisi.",
+    });
   }
 
-  if (!isValidRetirementNumber(retirement_number)) {
+  if (!isValidRetirementNumber(finalRetirementNumber)) {
     return res.status(400).json({
       status: "error",
       message: "Format retirement_number tidak valid! Contoh: 01-9-311589-40",
@@ -524,45 +532,72 @@ router.put("/api/update-member", async (req, res) => {
   }
 
   try {
-    const [oldData] = await db
-      .promise()
-      .query(
-        "SELECT card_image_path FROM members WHERE retirement_number = ? LIMIT 1",
-        [old_retirement_number],
-      );
+    let oldRetirementNumber = finalOldRetirementNumber;
+    let oldFotoPath = null;
 
-    if (!oldData.length) {
-      return res
-        .status(404)
-        .json({
+    if (targetMemberId) {
+      const [memberRows] = await db
+        .promise()
+        .query(
+          "SELECT retirement_number, card_image_path FROM members WHERE id = ? LIMIT 1",
+          [targetMemberId],
+        );
+
+      if (!memberRows.length) {
+        return res.status(404).json({
+          status: "error",
+          message: "Data member tidak ditemukan.",
+        });
+      }
+
+      oldRetirementNumber = memberRows[0].retirement_number;
+      oldFotoPath = memberRows[0].card_image_path;
+    } else {
+      const [oldData] = await db
+        .promise()
+        .query(
+          "SELECT retirement_number, card_image_path FROM members WHERE retirement_number = ? LIMIT 1",
+          [oldRetirementNumber],
+        );
+
+      if (!oldData.length) {
+        return res.status(404).json({
           status: "error",
           message: "Data member lama tidak ditemukan.",
         });
+      }
+
+      oldRetirementNumber = oldData[0].retirement_number;
+      oldFotoPath = oldData[0].card_image_path;
     }
 
-    if (retirement_number !== old_retirement_number) {
+    if (finalRetirementNumber !== oldRetirementNumber) {
       const [dupeCheck] = await db
         .promise()
         .query(
           "SELECT retirement_number FROM members WHERE retirement_number = ? LIMIT 1",
-          [retirement_number],
+          [finalRetirementNumber],
         );
+
       if (dupeCheck.length > 0) {
         return res.status(400).json({
           status: "error",
-          message: `Nomor pensiun ${retirement_number} sudah terdaftar!`,
+          message: `Nomor pensiun ${finalRetirementNumber} sudah terdaftar!`,
         });
       }
     }
 
-    const oldFotoPath = oldData[0].card_image_path;
-    if (oldFotoPath && fs.existsSync("." + oldFotoPath)) {
-      await fs.promises.unlink("." + oldFotoPath);
+    if (oldFotoPath) {
+      const normalizedOldPath = oldFotoPath.startsWith("/")
+        ? `.${oldFotoPath}`
+        : oldFotoPath;
+
+      if (fs.existsSync(normalizedOldPath)) {
+        await fs.promises.unlink(normalizedOldPath);
+      }
     }
 
     const card_number = generateCardNumber();
-
-    // Buat ID Card baru
     const templatePath = path.resolve("assets/ID_CARD_FRONT_2024.jpg");
     const template = await loadImage(templatePath);
     const canvas = createCanvas(template.width, template.height);
@@ -571,10 +606,10 @@ router.put("/api/update-member", async (req, res) => {
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 40px ArialBold";
-    ctx.fillText(name.toUpperCase(), 47, 520);
+    ctx.fillText(finalName.toUpperCase(), 47, 520);
 
     ctx.font = "bold 28px ArialBold";
-    ctx.fillText(`NP. ${retirement_number}`, 47, 560);
+    ctx.fillText(`NP. ${finalRetirementNumber}`, 47, 560);
 
     ctx.fillStyle = "#000000";
     ctx.font = "28px ArialBold";
@@ -589,44 +624,64 @@ router.put("/api/update-member", async (req, res) => {
 
     const fotoPath = `/uploads/wa/${filename}`;
 
-    await db.promise().query(
-      `UPDATE members 
-       SET name=?, retirement_number=?, phone_number=?, birth_date=?, address=?, city=?, card_image_path=? 
-       WHERE retirement_number=?`,
-      [
-        name,
-        retirement_number,
-        phone_number,
-        birth_date,
-        address,
-        city,
-        fotoPath,
-        old_retirement_number,
-      ],
-    );
+    const updateQuery = targetMemberId
+      ? "UPDATE members SET name=?, retirement_number=?, phone_number=?, birth_date=?, address=?, city=?, card_image_path=? WHERE id=?"
+      : "UPDATE members SET name=?, retirement_number=?, phone_number=?, birth_date=?, address=?, city=?, card_image_path=? WHERE retirement_number=?";
 
-    res.json({
+    const updateParams = targetMemberId
+      ? [
+          finalName,
+          finalRetirementNumber,
+          phone_number,
+          birth_date,
+          address,
+          city,
+          fotoPath,
+          targetMemberId,
+        ]
+      : [
+          finalName,
+          finalRetirementNumber,
+          phone_number,
+          birth_date,
+          address,
+          city,
+          fotoPath,
+          oldRetirementNumber,
+        ];
+
+    await db.promise().query(updateQuery, updateParams);
+
+    return res.json({
       status: "success",
       message: "Data berhasil diperbarui dan ID Card baru dibuat",
       foto_idcard: fotoPath,
-      data: { name, retirement_number, card_number },
+      data: {
+        name: finalName,
+        retirement_number: finalRetirementNumber,
+        card_number,
+      },
     });
   } catch (error) {
     console.error("❌ Gagal update member:", error);
+
     if (error.code === "ER_DUP_ENTRY") {
       return res.status(400).json({
         status: "error",
-        message: `Nomor pensiun ${retirement_number} sudah terdaftar di sistem.`,
+        message: `Nomor pensiun ${finalRetirementNumber} sudah terdaftar di sistem.`,
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       status: "error",
       message: "Gagal update data atau membuat ID Card baru",
       detail: error.message,
     });
   }
-});
+}
+
+router.post("/api/update-member", handleUpdateMember);
+router.put("/api/update-member", handleUpdateMember);
 
 router.get("/api/member", async (req, res) => {
   try {
