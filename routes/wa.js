@@ -753,6 +753,77 @@ async function handleUpdateMember(req, res) {
 router.post("/api/update-member", handleUpdateMember);
 router.put("/api/update-member", handleUpdateMember);
 
+router.get("/api/member/search", async (req, res) => {
+  try {
+    const q = String(req.query.q ?? req.query.keyword ?? "").trim();
+
+    if (!q) {
+      return res.status(400).json({
+        status: "error",
+        message: "Parameter pencarian wajib diisi.",
+      });
+    }
+
+    const isRetirementSearch = /^\d{2}-\d-\d{6}-\d{2}$/.test(q);
+
+    let sql = `
+      SELECT 
+        m.id,
+        m.name,
+        m.retirement_number,
+        m.card_number,
+        m.phone_number,
+        m.birth_date,
+        m.address,
+        m.city,
+        m.card_image_path,
+        m.created_at,
+        m.branch_id,
+        b.name AS branch_name,
+        b.code AS branch_code
+      FROM members m
+      LEFT JOIN branches b ON m.branch_id = b.id
+      WHERE 1=1
+    `;
+
+    const params = [];
+
+    if (isRetirementSearch) {
+      sql += " AND (m.retirement_number = ? OR m.name LIKE ? OR m.retirement_number LIKE ?)";
+      params.push(q, `%${q}%`, `%${q}%`);
+    } else {
+      sql += " AND (m.name LIKE ? OR m.retirement_number LIKE ? OR m.name = ?)";
+      params.push(`%${q}%`, `%${q}%`, q);
+    }
+
+    sql += " ORDER BY m.name ASC LIMIT 20";
+
+    const [rows] = await db.promise().query(sql, params);
+
+    if (!rows.length) {
+      return res.status(404).json({
+        status: "empty",
+        message: "Data member tidak ditemukan.",
+        data: [],
+      });
+    }
+
+    return res.json({
+      status: "success",
+      message: "Data member berhasil ditemukan.",
+      total: rows.length,
+      data: rows,
+    });
+  } catch (error) {
+    console.error("❌ Error GET /api/member/search:", error.message);
+    return res.status(500).json({
+      status: "error",
+      message: "Gagal mencari data member.",
+      detail: error.message,
+    });
+  }
+});
+
 router.get("/api/member", async (req, res) => {
   try {
     const { branch_id, city, name } = req.query;
