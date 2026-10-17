@@ -195,37 +195,28 @@ async function sendWhatsAppMessage(chatId, media, caption, retries = 3) {
       console.log("📱 Nomor asli :", chatId);
       console.log("📱 Nomor WA   :", whatsappId);
 
-      // Cek apakah nomor terdaftar di WhatsApp
-      const numberId = await client.getNumberId(phone);
-
-      if (!numberId) {
-        throw new Error(
-          `Nomor ${phone} tidak terdaftar di WhatsApp`
-        );
+      // Validasi dasar nomor setelah dinormalisasi.
+      if (phone.length < 10 || phone.length > 15) {
+        throw new Error("Nomor WhatsApp tidak valid setelah dinormalisasi");
       }
 
-      console.log("✅ Nomor WhatsApp ditemukan:", numberId._serialized);
+      // Lewati getNumberId(): pada beberapa kondisi lookup ini memicu
+      // error internal WhatsApp Web "Data passed to getter must include an id property".
+      // sendMessage tetap akan mengembalikan error jika chatId tidak valid.
+      const recipientId = whatsappId;
+      console.log("📨 Mengirim WhatsApp ke:", recipientId);
 
       // Kirim caption
       if (caption) {
-        await client.sendMessage(
-          numberId._serialized,
-          caption
-        );
-
+        await client.sendMessage(recipientId, caption);
         console.log("✅ Caption berhasil dikirim");
       }
 
       // Kirim media
       if (media) {
-        await client.sendMessage(
-          numberId._serialized,
-          media,
-          {
-            caption: "🎫 Ini kartu anggota anda",
-          }
-        );
-
+        await client.sendMessage(recipientId, media, {
+          caption: "🎫 Ini kartu anggota anda",
+        });
         console.log("✅ ID Card berhasil dikirim");
       }
 
