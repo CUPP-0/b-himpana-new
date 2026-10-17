@@ -214,9 +214,10 @@ async function sendWhatsAppMessage(chatId, media, caption, retries = 3) {
 
       // Kirim media
       if (media) {
-        await client.sendMessage(recipientId, media, {
-          caption: "🎫 Ini kartu anggota anda",
-        });
+        // Caption sudah dikirim sebagai pesan teks terpisah di atas.
+        // Kirim media tanpa opsi caption agar tidak memicu error internal
+        // WhatsApp Web saat memproses media dengan caption.
+        await client.sendMessage(recipientId, media);
         console.log("✅ ID Card berhasil dikirim");
       }
 
