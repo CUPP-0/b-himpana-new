@@ -14,10 +14,8 @@ const router = express.Router();
 /* ======================================================
    📁 Folder upload
 ====================================================== */
-const uploadDir = "uploads/wa";
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const uploadDir = path.resolve(__dirname, "../uploads/wa");
+fs.mkdirSync(uploadDir, { recursive: true });
 
 /* ======================================================
    🖋️ Register font
@@ -365,6 +363,7 @@ router.post("/api/kirim-member", async (req, res) => {
       filePath,
       canvas.toBuffer("image/jpeg", { quality: 0.95 }),
     );
+    console.log("🪪 ID Card tersimpan:", filePath);
 
     const fotoPath = `/uploads/wa/${filename}`;
 
@@ -443,15 +442,11 @@ router.post("/api/kirim-member", async (req, res) => {
     } catch (waError) {
       console.warn("⚠️ Gagal kirim ke WhatsApp:", waError.message);
 
-      if (filePath && fs.existsSync(filePath)) {
-        await fs.promises.unlink(filePath);
-      }
-
       return res.json({
         status: "warning",
         message:
           "Data tersimpan, tapi gagal kirim ke WhatsApp: " + waError.message,
-        foto_idcard: null,
+        foto_idcard: fotoPath,
       });
     }
   } catch (error) {

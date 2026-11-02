@@ -4,6 +4,7 @@ import bodyParser from "body-parser";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import db from "./db.js";
 import beritaRoutes from "./routes/beritaRoutes.js";
 import artikelRoutes from "./routes/artikelRoute.js";
@@ -31,7 +32,11 @@ app.use((req, res, next) => {
 
 // === KONFIGURASI ===
 const FONNTE_TOKEN = "BjMWRoyrKaYJTFBsjcav"; // token kamu
-const uploadDir = path.join(process.cwd(), "uploads/wa");
+const uploadDir = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "uploads",
+  "wa",
+);
 
 // Pastikan folder upload ada
 if (!fs.existsSync(uploadDir)) {
@@ -47,7 +52,12 @@ app.get("/", (req, res) => {
 });
 
 // static file upload
-app.use("/uploads", express.static("uploads"));
+app.use(
+  "/uploads",
+  express.static(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "uploads"),
+  ),
+);
 
 // routes berita & artikel
 app.use("/api/berita", beritaRoutes);
