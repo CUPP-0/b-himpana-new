@@ -168,85 +168,79 @@ function isValidRetirementNumber(value) {
 /* ======================================================
    📩 FUNGSI: Kirim WhatsApp dengan Error Handling
 ====================================================== */
-async function sendWhatsAppMessage(chatId, media, caption, retries = 3) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
+async function sendWhatsAppMessage(chatId, media, caption) {
+  if (!clientReady) {
+    throw new Error("WhatsApp client belum siap");
+  }
+
+  const rawChatId = String(chatId ?? "").trim();
+  let phone = rawChatId
+    .replace("@c.us", "")
+    .replace("@s.whatsapp.net", "")
+    .replace(/\D/g, "");
+
+  if (!phone) {
+    throw new Error("Nomor WhatsApp kosong atau tidak valid");
+  }
+
+  if (phone.startsWith("0")) {
+    phone = "62" + phone.substring(1);
+  } else if (!phone.startsWith("62")) {
+    phone = "62" + phone;
+  }
+
+  if (phone.length < 10 || phone.length > 15) {
+    throw new Error("Nomor WhatsApp tidak valid setelah dinormalisasi");
+  }
+
+  const numberId = await client.getNumberId(phone);
+  const recipientId = numberId?._serialized;
+  if (!recipientId) {
+    throw new Error(
+      `Nomor ${phone} tidak terdaftar di WhatsApp atau ID penerima tidak valid`,
+    );
+  }
+
+  console.log("📨 Mengirim WhatsApp ke:", recipientId);
+
+  if (caption) {
+    await client.sendMessage(recipientId, caption, { sendSeen: false });
+    console.log("✅ Caption berhasil dikirim");
+  }
+
+  if (media) {
+    if (!media.data || !media.mimetype) {
+      throw new Error("File media WhatsApp tidak valid (data/MIME type kosong)");
+    }
+
     try {
-      if (!clientReady) {
-        throw new Error("WhatsApp client belum siap");
-      }
-
-      // Pastikan nomor dalam format yang benar
-      let phone = String(chatId)
-        .replace("@c.us", "")
-        .replace(/\D/g, "");
-
-      if (phone.startsWith("0")) {
-        phone = "62" + phone.substring(1);
-      }
-
-      if (!phone.startsWith("62")) {
-        phone = "62" + phone;
-      }
-
-      const whatsappId = `${phone}@c.us`;
-
-      console.log("📱 Nomor asli :", chatId);
-      console.log("📱 Nomor WA   :", whatsappId);
-
-      // Validasi dasar nomor setelah dinormalisasi.
-      if (phone.length < 10 || phone.length > 15) {
-        throw new Error("Nomor WhatsApp tidak valid setelah dinormalisasi");
-      }
-
-      // Lewati getNumberId(): pada beberapa kondisi lookup ini memicu
-      // error internal WhatsApp Web "Data passed to getter must include an id property".
-      // sendMessage tetap akan mengembalikan error jika chatId tidak valid.
-      const recipientId = whatsappId;
-      console.log("📨 Mengirim WhatsApp ke:", recipientId);
-
-      // Kirim caption
-      if (caption) {
-        await client.sendMessage(recipientId, caption);
-        console.log("✅ Caption berhasil dikirim");
-      }
-
-      // Kirim media
-      if (media) {
-        // Caption sudah dikirim sebagai pesan teks terpisah di atas.
-        // Kirim media tanpa opsi caption agar tidak memicu error internal
-        // WhatsApp Web saat memproses media dengan caption.
-        await client.sendMessage(recipientId, media);
-        console.log("✅ ID Card berhasil dikirim");
-      }
-
-      console.log("✅ Pesan WhatsApp berhasil dikirim");
-
-      return true;
-    } catch (error) {
-      console.error(`❌ Attempt ${attempt}/${retries} gagal`);
-
-      console.error("Type:", typeof error);
-      console.error("Error:", error);
-      console.error("Message:", error?.message);
-      console.error("Stack:", error?.stack);
-
-      if (attempt === retries) {
-        throw error;
-      }
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, 2000 * attempt)
-      );
-
+      await client.sendMessage(recipientId, media, {
+        sendSeen: false,
+        waitUntilMsgSent: true,
+      });
+      console.log("✅ ID Card berhasil dikirim sebagai gambar");
+    } catch (mediaError) {
       if (
-        error?.message?.includes("Execution context was destroyed") ||
-        error?.message?.includes("Session closed")
+        !mediaError?.message?.includes(
+          "Data passed to getter must include an id property",
+        )
       ) {
-        console.log("🔄 Execution context bermasalah, restart client...");
-        await restartClient();
+        throw mediaError;
       }
+
+      console.warn(
+        "⚠️ WhatsApp Web gagal memproses gambar; mencoba mengirim kartu sebagai dokumen.",
+      );
+      await client.sendMessage(recipientId, media, {
+        sendMediaAsDocument: true,
+        sendSeen: false,
+        waitUntilMsgSent: true,
+      });
+      console.log("✅ ID Card berhasil dikirim sebagai dokumen");
     }
   }
+
+  return true;
 }
 
 // 📩 ROUTE: Tambah Member Baru - PERBAIKAN
