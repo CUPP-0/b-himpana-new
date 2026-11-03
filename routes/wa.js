@@ -3,10 +3,7 @@ import fs from "fs";
 import path from "path";
 import { createCanvas, loadImage, registerFont } from "canvas";
 import db from "../db.js";
-import qrcode from "qrcode-terminal";
-import pkg from "whatsapp-web.js";
 import { fileURLToPath } from "url";
-const { Client, LocalAuth, MessageMedia } = pkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const router = express.Router();
@@ -25,127 +22,6 @@ registerFont(path.join(__dirname, "../fonts/ARIALBD.TTF"), {
 });
 
 /* ======================================================
-   ⚙️ Setup WhatsApp Web Client
-====================================================== */
-// ⚙️ Setup WhatsApp Web Client - PERBAIKAN
-let clientReady = false;
-let isReconnecting = false;
-
-const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: "./wa-session" }),
-  puppeteer: {
-    executablePath: "/usr/bin/chromium",
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--no-first-run",
-      "--no-zygote",
-      "--disable-gpu",
-    ],
-  },
-});
-
-// Fungsi restart client
-const restartClient = async () => {
-  if (isReconnecting) return;
-
-  isReconnecting = true;
-  console.log("🔄 Restarting WhatsApp client...");
-
-  try {
-    await client.destroy();
-    await client.initialize();
-    isReconnecting = false;
-  } catch (error) {
-    console.error("❌ Gagal restart client:", error);
-    isReconnecting = false;
-  }
-};
-
-client.on("qr", (qr) => {
-  console.log("📱 Scan QR untuk login WhatsApp:");
-  qrcode.generate(qr, { small: true });
-});
-
-client.on("authenticated", () => {
-  console.log("🔐 WhatsApp berhasil authenticated!");
-});
-
-client.on("ready", () => {
-  console.log("✅ WhatsApp Web siap digunakan!");
-  clientReady = true;
-});
-
-client.on("auth_failure", (msg) => {
-  console.error("❌ AUTH FAILURE:", msg);
-});
-
-client.on("disconnected", (reason) => {
-  console.error("❌ DISCONNECTED:", reason);
-});
-
-client.on("loading_screen", (percent, message) => {
-  console.log(`⏳ LOADING: ${percent}% - ${message}`);
-});
-
-client.on("change_state", (state) => {
-  console.log(`🔄 STATE: ${state}`);
-});
-
-client.on("error", (error) => {
-  console.error("💥 CLIENT ERROR:", error);
-});
-
-client.on("disconnected", (reason) => {
-  console.error("❌ WhatsApp Client terputus:", reason);
-  clientReady = false;
-
-  // JANGAN restart otomatis dulu
-});
-
-client.on("remote_session_saved", () => {
-  console.log("💾 Session saved remotely");
-});
-
-console.log("🚀 Memulai WhatsApp client...");
-
-client.on("authenticated", async () => {
-  console.log("🔐 WhatsApp berhasil authenticated!");
-
-  try {
-    const info = await client.pupPage.evaluate(() => ({
-      debugVersion: window.Debug?.VERSION ?? null,
-      authStore: typeof window.AuthStore,
-      store: typeof window.Store,
-      wwebjs: typeof window.WWebJS,
-      readyState: document.readyState
-    }));
-
-    console.log("📊 BEFORE STORE:", info);
-
-    await client.pupPage.waitForFunction(
-      'window.Store != undefined',
-      { timeout: 10000 }
-    );
-
-    console.log("✅ window.Store sudah tersedia!");
-
-  } catch (err) {
-    console.error("❌ window.Store TIDAK tersedia:", err.message);
-  }
-});
-
-client.initialize()
-  .then(() => {
-    console.log("✅ initialize() selesai dipanggil");
-  })
-  .catch((error) => {
-    console.error("❌ initialize() gagal:", error);
-  });
-
-/* ======================================================
    🧮 Fungsi Generate Card Number otomatis
 ====================================================== */
 function generateCardNumber() {
@@ -162,87 +38,31 @@ function isValidRetirementNumber(value) {
   return pattern.test(value);
 }
 
+router.get("/api/kirim-member/download/:filename", (req, res, next) => {
+  const { filename } = req.params;
+  if (!/^idcard-\d+\.jpg$/.test(filename)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Nama file tidak valid.",
+    });
+  }
+
+  const filePath = path.join(uploadDir, filename);
+  res.download(filePath, filename, (error) => {
+    if (!error) return;
+    if (error.code === "ENOENT" && !res.headersSent) {
+      return res.status(404).json({
+        status: "error",
+        message: "File kartu tidak ditemukan.",
+      });
+    }
+    if (!res.headersSent) return next(error);
+  });
+});
+
 /* ======================================================
    📩 ROUTE: Tambah Member Baru
 ====================================================== */
-/* ======================================================
-   📩 FUNGSI: Kirim WhatsApp dengan Error Handling
-====================================================== */
-async function sendWhatsAppMessage(chatId, media, caption) {
-  if (!clientReady) {
-    throw new Error("WhatsApp client belum siap");
-  }
-
-  const rawChatId = String(chatId ?? "").trim();
-  let phone = rawChatId
-    .replace("@c.us", "")
-    .replace("@s.whatsapp.net", "")
-    .replace(/\D/g, "");
-
-  if (!phone) {
-    throw new Error("Nomor WhatsApp kosong atau tidak valid");
-  }
-
-  if (phone.startsWith("0")) {
-    phone = "62" + phone.substring(1);
-  } else if (!phone.startsWith("62")) {
-    phone = "62" + phone;
-  }
-
-  if (phone.length < 10 || phone.length > 15) {
-    throw new Error("Nomor WhatsApp tidak valid setelah dinormalisasi");
-  }
-
-  const numberId = await client.getNumberId(phone);
-  const recipientId = numberId?._serialized;
-  if (!recipientId) {
-    throw new Error(
-      `Nomor ${phone} tidak terdaftar di WhatsApp atau ID penerima tidak valid`,
-    );
-  }
-
-  console.log("📨 Mengirim WhatsApp ke:", recipientId);
-
-  if (caption) {
-    await client.sendMessage(recipientId, caption, { sendSeen: false });
-    console.log("✅ Caption berhasil dikirim");
-  }
-
-  if (media) {
-    if (!media.data || !media.mimetype) {
-      throw new Error("File media WhatsApp tidak valid (data/MIME type kosong)");
-    }
-
-    try {
-      await client.sendMessage(recipientId, media, {
-        sendSeen: false,
-        waitUntilMsgSent: true,
-      });
-      console.log("✅ ID Card berhasil dikirim sebagai gambar");
-    } catch (mediaError) {
-      if (
-        !mediaError?.message?.includes(
-          "Data passed to getter must include an id property",
-        )
-      ) {
-        throw mediaError;
-      }
-
-      console.warn(
-        "⚠️ WhatsApp Web gagal memproses gambar; mencoba mengirim kartu sebagai dokumen.",
-      );
-      await client.sendMessage(recipientId, media, {
-        sendMediaAsDocument: true,
-        sendSeen: false,
-        waitUntilMsgSent: true,
-      });
-      console.log("✅ ID Card berhasil dikirim sebagai dokumen");
-    }
-  }
-
-  return true;
-}
-
 // 📩 ROUTE: Tambah Member Baru - PERBAIKAN
 router.post("/api/kirim-member", async (req, res) => {
   const {
@@ -403,46 +223,13 @@ router.post("/api/kirim-member", async (req, res) => {
       card_number,
     );
 
-    // === Kirim ke WhatsApp ===
-    try {
-      let phoneNumber = phone_number.replace(/[^0-9]/g, "");
-      if (phoneNumber.startsWith("0"))
-        phoneNumber = "62" + phoneNumber.slice(1);
-      else if (!phoneNumber.startsWith("62")) phoneNumber = "62" + phoneNumber;
-      const chatId = phoneNumber + "@c.us";
-
-      const caption = `Selamat ${name}, Anda telah resmi menjadi anggota baru HIMPANA`;
-      const media = MessageMedia.fromFilePath(filePath);
-
-      // === Kirim media pertama (depan) ===
-      await sendWhatsAppMessage(chatId, media, caption);
-
-      // === Kirim media kedua (belakang) ===
-      const backImagePath = path.resolve("assets/belakang-kta.png");
-      const mediaBack = MessageMedia.fromFilePath(backImagePath);
-
-      await sendWhatsAppMessage(
-        chatId,
-        mediaBack,
-        "Ini adalah kartu anggota sisi belakang. Terima kasih telah menjadi bagian dari keluarga besar HIMPANA.",
-      );
-
-      return res.json({
-        status: "success",
-        message: "Data tersimpan dan ID Card berhasil dikirim ke WhatsApp.",
-        foto_idcard: fotoPath,
-        data: { name, retirement_number, card_number, branch_id },
-      });
-    } catch (waError) {
-      console.warn("⚠️ Gagal kirim ke WhatsApp:", waError.message);
-
-      return res.json({
-        status: "warning",
-        message:
-          "Data tersimpan, tapi gagal kirim ke WhatsApp: " + waError.message,
-        foto_idcard: fotoPath,
-      });
-    }
+    return res.json({
+      status: "success",
+      message: "Pendaftaran berhasil. Kartu anggota siap diunduh.",
+      foto_idcard: fotoPath,
+      download_url: `/api/kirim-member/download/${encodeURIComponent(filename)}`,
+      data: { name, retirement_number, card_number, branch_id },
+    });
   } catch (error) {
     if (filePath && fs.existsSync(filePath)) {
       try {
